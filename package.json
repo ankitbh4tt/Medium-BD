@@ -8,7 +8,7 @@
     "@prisma/client": "^6.2.1",
     "@prisma/extension-accelerate": "^1.2.1",
     "hono": "^4.6.16",
-    "medium-demo-project-npm": "^1.0.1",
+    "medium-demo-project-npm": "^1.2.0",
     "prisma": "^6.2.1"
   },
   "devDependencies": {
