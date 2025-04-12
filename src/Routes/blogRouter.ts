@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client/edge";
 import { withAccelerate } from "@prisma/extension-accelerate";
 import { Hono } from "hono";
 import { verify } from "hono/jwt";
+import {getCookie} from "hono/cookie"
 import {createBlogInput, CreateBlogInput,updateBlogInput,UpdateBlogInput} from "medium-demo-project-npm"
 
 export const blogRouter = new Hono<{
@@ -17,11 +18,10 @@ export const blogRouter = new Hono<{
 
 // midddleware
 blogRouter.use('/*',async(c,next)=>{
-    // get the header 
-    const header = c.req.header("authorization")||"";
-    const token = header.split(' ')[1];
+    // get the header   
+    const header = c.req.header('Authorization')
+    const token = header?.split(' ')[1]|| ''
     const user = await verify(token,c.env.JWT_SECRET);
-  
     if(user ){
         // @ts-ignore
         c.set("userId",user.id)
@@ -34,7 +34,18 @@ blogRouter.use('/*',async(c,next)=>{
     // verify the header
     // if the header is correct ,call next
     // otherwise return 403 unauthorized
-  })
+})
+
+blogRouter.get('/isAuthenticated',async(c)=>{
+    const userId = c.get('userId')
+    if(!userId){
+        c.status(401)
+        return c.json({"message":"Please make sure to login in",auth:false})
+    }
+
+    return c.json({userId,"auth":true})
+
+})
 
 blogRouter.post('/',async(c)=>{
     const body = await c.req.json()
@@ -90,6 +101,28 @@ blogRouter.put('/',async(c)=>{
     });
 })
 
+blogRouter.get("/bulk",async(c)=>{
+    const prisma = new PrismaClient({
+        datasourceUrl:c.env.DATABASE_URL,
+    }).$extends(withAccelerate())
+    try {
+        const blogs = await prisma.post.findMany({});
+        console.log("Fetched blogs (raw):", blogs); // Detailed debug log
+        if (blogs.length === 0) {
+          console.log("No blogs found in the database (unexpected since SQL shows data)");
+          return c.json({ blogs: [] });
+        }
+        return c.json({ blogs }); // Explicitly return { blogs }
+      } catch (error) {
+        console.error("Error fetching blogs:", error);
+        c.status(500);
+        return c.json({
+          message: "Error while fetching blog posts",
+        });
+      }
+})
+
+
 blogRouter.get("/:id",async (c)=>{
     const id = await c.req.param("id")
     const prisma = new PrismaClient({
@@ -113,18 +146,4 @@ blogRouter.get("/:id",async (c)=>{
     }
 
 
-})
-blogRouter.get("/bulk",async(c)=>{
-    const prisma = new PrismaClient({
-        datasourceUrl:c.env.DATABASE_URL,
-    }).$extends(withAccelerate())
-    try {
-        const blogs = await prisma.post.findMany({})
-        return c.json({blogs})
-    } catch (error) {
-        c.status(411)
-        return c.json({
-            message:"Error while fetching blog post"
-        })
-    }
 })

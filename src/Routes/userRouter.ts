@@ -38,8 +38,8 @@ export const userRouter = new Hono<{
             })
           
             const token = await sign({id:user.id},c.env.JWT_SECRET)
-            c.header('Set-Cookie', `jwt=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600`);
             return c.json({
+              jwt:token,
               username:body.username
             });
       }catch (error: unknown) {
@@ -72,18 +72,20 @@ export const userRouter = new Hono<{
   })
   
 userRouter.post('/signin',async (c)=>{
-
 const prisma = new PrismaClient({
     datasourceUrl:c.env.DATABASE_URL,
 }).$extends(withAccelerate())
 
 const body = await c.req.json()
-const {success} = signinInput.safeParse(body)
-if(!success){
-  c.status(411)
+console.log(body)
+const result = signinInput.safeParse(body)
+
+if (!result.success) {
+  console.log("Zod errors:", result.error.format());
+  c.status(411);
   return c.json({
-    message:"Inputs not correct !"
-  })
+    message: "Inputs not correct !"
+  });
 }
 
 const user = await prisma.user.findUnique({
@@ -98,6 +100,6 @@ if(!user){
     return c.json({error:"User not found"});
 }
 const jwt = await sign({id:user.id},c.env.JWT_SECRET);
-return c.json({jwt})
+return c.json({token:jwt,name:user.name})
 
 })
