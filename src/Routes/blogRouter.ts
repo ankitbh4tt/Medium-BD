@@ -17,24 +17,33 @@ export const blogRouter = new Hono<{
 
 
 // midddleware
-blogRouter.use('/*',async(c,next)=>{
-    // get the header   
-    const header = c.req.header('Authorization')
-    const token = header?.split(' ')[1]|| ''
-    const user = await verify(token,c.env.JWT_SECRET);
-    if(user ){
-        // @ts-ignore
-        c.set("userId",user.id)
-        await next()
-    }else{
-      c.status(403)
-      return c.json({error:"unathorized"})
-    }
+blogRouter.use('/*', async (c, next) => {
+    try {
+      // Get the header
+      const header = c.req.header('Authorization');
+      const token = header?.split(' ')[1] || '';
   
-    // verify the header
-    // if the header is correct ,call next
-    // otherwise return 403 unauthorized
-})
+      if (!token) {
+        c.status(401); // Unauthorized if no token
+        return c.json({ error: "No token provided" });
+      }
+  
+      // Verify the token
+      const user = await verify(token, c.env.JWT_SECRET);
+      if (!user) {
+        c.status(403); // Forbidden if token is invalid
+        return c.json({ error: "Unauthorized" });
+      }
+  
+      // @ts-ignore
+      c.set("userId", user.id);
+      await next();
+    } catch (error) {
+      console.error("Authentication error:", error); // Log the error for debugging
+      c.status(500); // Internal server error for unexpected issues
+      return c.json({ message: "Internal server error during authentication",error });
+    }
+  });
 
 blogRouter.get('/isAuthenticated',async(c)=>{
     const userId = c.get('userId')
