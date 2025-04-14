@@ -1,6 +1,6 @@
-import { PrismaClient } from "@prisma/client/edge";
+import { Prisma, PrismaClient } from "@prisma/client/edge";
 import { withAccelerate } from "@prisma/extension-accelerate";
-import { Hono } from "hono";
+import { Context, Hono } from "hono";
 import { verify } from "hono/jwt";
 import {getCookie} from "hono/cookie"
 import {createBlogInput, CreateBlogInput,updateBlogInput,UpdateBlogInput} from "medium-demo-project-npm"
@@ -62,7 +62,8 @@ blogRouter.post('/',async(c)=>{
     const prisma = new PrismaClient({
         datasourceUrl:c.env.DATABASE_URL,
     }).$extends(withAccelerate())
-    const {success} = createBlogInput.safeParse(body)
+    const result = createBlogInput.safeParse(body)
+    const success = result.success
     if(!success){
         c.status(411)
         return c.json({
@@ -132,27 +133,63 @@ blogRouter.get("/bulk",async(c)=>{
 })
 
 
-blogRouter.get("/:id",async (c)=>{
-    const id = await c.req.param("id")
+interface Blog {
+    id: string;
+    title: string;
+    content: string;
+    published: boolean;
+  }
+  
+  interface ErrorResponse {
+    message: string;
+  }
+  
+  blogRouter.get('/:id', async (c: Context) => {
+    const id = await c.req.param('id');
     const prisma = new PrismaClient({
-        datasourceUrl:c.env.DATABASE_URL,
-    }).$extends(withAccelerate())
-
+      datasourceUrl: c.env.DATABASE_URL,
+    }).$extends(withAccelerate());
+  
     try {
-        const blog = await prisma.post.findFirst({
-            where:{
-                id:id
-            }
-        })
-        return c.json({
-            blog
-        });
-    } catch (error) {
-        c.status(411);
-        return c.json({
-            message:"Error while fetching blog post"
-        })
+      const blog = await prisma.post.findFirst({
+        where: { id },
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          published: true,
+        },
+      });
+  
+      if (!blog) {
+        c.status(404);
+        return c.json<ErrorResponse>({ message: 'Blog post not found' });
+      }
+  
+      return c.json<{ blog: Blog }>({ blog });
+    } catch (error: unknown) {
+      // Log error for debugging
+      console.error('Error fetching blog post:', error);
+  
+      // Type narrowing for Prisma errors
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') {
+          c.status(404);
+          return c.json<ErrorResponse>({ message: 'Blog post not found' });
+        }
+        c.status(400);
+        return c.json<ErrorResponse>({ message: 'Invalid blog post ID' });
+      }
+  
+      if (error instanceof Prisma.PrismaClientValidationError) {
+        c.status(400);
+        return c.json<ErrorResponse>({ message: 'Invalid query parameters' });
+      }
+  
+      // Generic server error
+      c.status(500);
+      return c.json<ErrorResponse>({ message: 'Internal server error' });
+    } finally {
+      await prisma.$disconnect();
     }
-
-
-})
+  });
