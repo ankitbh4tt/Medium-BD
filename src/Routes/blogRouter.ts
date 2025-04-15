@@ -163,7 +163,7 @@ interface Blog {
   
       if (!blog) {
         c.status(404);
-        return c.json<ErrorResponse>({ message: 'Blog post not found' });
+        return c.json<ErrorResponse>({ message: 'Blog post not found!' });
       }
   
       return c.json<{ blog: Blog }>({ blog });
